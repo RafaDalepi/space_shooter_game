@@ -13,12 +13,11 @@ canvas.height = innerHeight;
 
 //Creates a template for what properties a player should have
 class Player {
-    constructor(x, y, radius, color, velocity) {
+    constructor(x, y, radius, color, x_to, y_to) {
         this.x = x;
         this.y = y;
         this.radius = radius;
         this.color = color;
-        this.velocity = velocity;
     }
 
     draw() {
@@ -30,8 +29,8 @@ class Player {
 
     update() {
         this.draw();
-        this.x = this.x + this.velocity.x;
-        this.y = this.y + this.velocity.y;
+        this.x = this.x + this.x_to;
+        this.y = this.y + this.y_to;
     }
 }
 
@@ -81,24 +80,11 @@ class Enemy {
     }
 }
 
-const x = canvas.width / 2;
-const y = canvas.height / 2;
-
-document.addEventListener('keypress', (event) => {
-    const keyName = event.key;
-    if (keyName === 'w' || keyName === 'W') {
-        y += 1;
-    } else if (keyName === 's' || keyName === 'S') {
-        y -= 1;
-    } else if (keyName === 'a' || keyName === 'A') {
-        x -= 1;
-    } else if (keyName === 'd' || keyName === 'D') {
-        x += 1;
-    }
-});
+var x = canvas.width / 2;
+var y = canvas.height / 2;
 
 //Create the player
-const player = new Player(x, y, 10, "white");
+const player = new Player(x, y, 10, "white", 0, 0);
 
 //Create an array of projectiles and enemies that we will add to
 var projectiles = [];
@@ -106,17 +92,30 @@ var enemies = [];
 
 //Keep track of the score of the player (initially at 0)
 let score = 0;
-
 var spawnEnemies;
 
 //Continuously Updates the screen with animations
 function animate() {
+    document.addEventListener('keypress', () => {
+        const keyName = KeyboardEvent.code;
+        if (keyName === 'w' || keyName === 'W') {
+            y += 1;
+        } else if (keyName === 's' || keyName === 'S') {
+            y -= 1;
+        } else if (keyName === 'a' || keyName === 'A') {
+            x -= 1;
+        } else if (keyName === 'd' || keyName === 'D') {
+            x += 1;
+        }
+    });
+
     animationId = requestAnimationFrame(animate);
 
     //Fill the screen with Color & Draw the player
     context.fillStyle = "rgba(0,0,0, 0.1)";
     context.fillRect(0, 0, canvas.width, canvas.height);
     player.draw();
+    player.update();
 
     //For every projectile, check whether it is out of the screen or colliding with an enemy
     projectiles.forEach((projectile, pidx) => {
