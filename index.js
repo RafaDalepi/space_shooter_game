@@ -1,42 +1,18 @@
+// Selecting the canvas and context from the DOM
 const canvas = document.querySelector("canvas");
 const context = canvas.getContext("2d");
-
-//Gets references to elements in the HTML file (id="")
+// Selecting other DOM elements
 const StartGameBtn = document.querySelector("#start-game-button");
 const Popup = document.querySelector("#popup");
 const scoreEl = document.querySelector("#score");
 const popupScore = document.querySelector("#popup-score");
 
-//sets the canvas width and height to the browser's inner width and height
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-//Creates a template for what properties a player should have
-class Player {
-    constructor(x, y, radius, color, x_to, y_to) {
-        this.x = x;
-        this.y = y;
-        this.radius = radius;
-        this.color = color;
-    }
-
-    draw() {
-        context.beginPath();
-        context.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
-        context.fillStyle = this.color;
-        context.fill();
-    }
-
-    update() {
-        this.draw();
-        this.x = this.x + this.x_to;
-        this.y = this.y + this.y_to;
-    }
-}
-
-//Creates a template for what properties a projectile should have
-class Projectile {
-    constructor(x, y, radius, color, velocity) {
+// Entity class to represent game entities like the player, enemies, and projectiles
+class Entity {
+    constructor(x, y, radius, color, velocity = { x: 0, y: 0 }) {
         this.x = x;
         this.y = y;
         this.radius = radius;
@@ -45,79 +21,68 @@ class Projectile {
     }
     draw() {
         context.beginPath();
-        context.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
+        context.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         context.fillStyle = this.color;
         context.fill();
     }
-
     update() {
         this.draw();
-        this.x = this.x + this.velocity.x;
-        this.y = this.y + this.velocity.y;
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
     }
 }
 
-//Creates a template for what properties enemies should have
-class Enemy {
-    constructor(x, y, radius, color, velocity) {
-        this.x = x;
-        this.y = y;
-        this.radius = radius;
-        this.color = color;
-        this.velocity = velocity;
-    }
-    draw() {
-        context.beginPath();
-        context.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
-        context.fillStyle = this.color;
-        context.fill();
-    }
-
-    update() {
-        this.draw();
-        this.x = this.x + this.velocity.x;
-        this.y = this.y + this.velocity.y;
-    }
-}
-
-var x = canvas.width / 2;
-var y = canvas.height / 2;
-
-//Create the player
-const player = new Player(x, y, 10, "white", 0, 0);
-
-//Create an array of projectiles and enemies that we will add to
-var projectiles = [];
-var enemies = [];
-
-//Keep track of the score of the player (initially at 0)
+let player = new Entity(canvas.width / 2, canvas.height / 2, 10, "white");
+let projectiles = [];
+let enemies = [];
 let score = 0;
-var spawnEnemies;
+let spawnEnemies;
+let keys = { w: false, a: false, s: false, d: false };
 
-//Continuously Updates the screen with animations
+addEventListener("keydown", ({ key }) => {
+    if (keys.hasOwnProperty(key)) keys[key] = true;
+});
+
+addEventListener("keyup", ({ key }) => {
+    if (keys.hasOwnProperty(key)) keys[key] = false;
+});
+
+function spawnEnemy() {
+    const radius = 15 * Math.random() + 10;
+    let x, y;
+
+    if (Math.random() < 0.5) {
+        x = Math.random() < 0.5 ? 0 - radius : canvas.width + radius;
+        y = Math.random() * canvas.height;
+    } else {
+        x = Math.random() * canvas.width;
+        y = Math.random() < 0.5 ? 0 - radius : canvas.height + radius;
+    }
+
+    const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
+    const angle = Math.atan2(player.y - y, player.x - x);
+    const velocity = { x: Math.cos(angle), y: Math.sin(angle) };
+    enemies.push(new Entity(x, y, radius, color, velocity));
+}
+
+function shootProjectile(event) {
+    const angle = Math.atan2(event.clientY - player.y, event.clientX - player.x);
+    const velocity = { x: Math.cos(angle) * 5, y: Math.sin(angle) * 5 };
+    projectiles.push(new Entity(player.x, player.y, 5, "white", velocity));
+}
+
 function animate() {
-    document.addEventListener('keypress', () => {
-        const keyName = KeyboardEvent.code;
-        if (keyName === 'w' || keyName === 'W') {
-            y += 1;
-        } else if (keyName === 's' || keyName === 'S') {
-            y -= 1;
-        } else if (keyName === 'a' || keyName === 'A') {
-            x -= 1;
-        } else if (keyName === 'd' || keyName === 'D') {
-            x += 1;
-        }
-    });
-
+    const speed = 2;
     animationId = requestAnimationFrame(animate);
 
-    //Fill the screen with Color & Draw the player
     context.fillStyle = "rgba(0,0,0, 0.1)";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    player.draw();
+
+    player.velocity.x = keys.d ? speed : keys.a ? -speed : 0;
+    player.velocity.y = keys.s ? speed : keys.w ? -speed : 0;
+
     player.update();
 
-    //For every projectile, check whether it is out of the screen or colliding with an enemy
     projectiles.forEach((projectile, pidx) => {
         projectile.update();
         if (
@@ -129,26 +94,26 @@ function animate() {
             projectiles.splice(pidx, 1);
         }
 
-        enemies.forEach((enemy, idx) => {
+        enemies.forEach((enemy, eidx) => {
             const dist = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
-            if (dist - enemy.radius - projectile.radius < 0.5) {
+            if (dist - enemy.radius - projectile.radius < 1) {
+                score += enemy.radius - 10 > 10 ? 100 : 250;
+                scoreEl.innerHTML = score;
                 if (enemy.radius - 10 > 10) {
-                    score += 100;
-                    scoreEl.innerHTML = score;
                     enemy.radius -= 10;
                 } else {
-                    score += 250;
-                    scoreEl.innerHTML = score;
-                    enemies.splice(idx, 1);
+                    enemies.splice(eidx, 1);
                 }
                 projectiles.splice(pidx, 1);
             }
         });
     });
 
-    //For each enemy, check whether it is colliding with the player
     enemies.forEach((enemy) => {
+        const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+        enemy.velocity = { x: Math.cos(angle), y: Math.sin(angle) };
         enemy.update();
+
         const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         if (dist - enemy.radius - player.radius < 1) {
             cancelAnimationFrame(animationId);
@@ -160,50 +125,14 @@ function animate() {
 }
 
 StartGameBtn.addEventListener("click", () => {
-    //Close popup and reset projectile, enemies, and score
     Popup.style.display = "none";
     projectiles = [];
     enemies = [];
     score = 0;
     scoreEl.innerHTML = 0;
+    player = new Entity(canvas.width / 2, canvas.height / 2, 10, "white");
 
-    //spawn enemies and animate
     animate();
-    spawnEnemies = setInterval(() => {
-        const radius = 15 * Math.random() + 10;
-
-        let x;
-        let y;
-
-        if (Math.random() < 0.5) {
-            x = Math.random() < 0.5 ? 0 - radius : canvas.width + radius;
-            y = Math.random() * canvas.height;
-        } else {
-            x = Math.random() * canvas.width;
-            y = Math.random() < 0.5 ? 0 - radius : canvas.height + radius;
-        }
-
-        const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
-        const angle = Math.atan2(canvas.height / 2 - y, canvas.width / 2 - x);
-        const velocity = {
-            x: Math.cos(angle),
-            y: Math.sin(angle)
-        };
-        enemies.push(new Enemy(x, y, radius, color, velocity));
-    }, 1000);
-
-    //add listener for clicks to shoot projectiles
-    addEventListener("click", (event) => {
-        const angle = Math.atan2(
-            event.clientY - canvas.height / 2,
-            event.clientX - canvas.width / 2
-        );
-        const velocity = {
-            x: Math.cos(angle) * 5,
-            y: Math.sin(angle) * 5
-        };
-        projectiles.push(
-            new Projectile(canvas.width / 2, canvas.height / 2, 5, "white", velocity)
-        );
-    });
+    spawnEnemies = setInterval(spawnEnemy, 1000);
+    addEventListener("click", shootProjectile);
 });
