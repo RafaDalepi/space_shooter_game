@@ -1,7 +1,7 @@
-// Selecting the canvas and context from the DOM
+
 const canvas = document.querySelector("canvas");
 const context = canvas.getContext("2d");
-// Selecting other DOM elements
+
 const StartGameBtn = document.querySelector("#start-game-button");
 const Popup = document.querySelector("#popup");
 const scoreEl = document.querySelector("#score");
@@ -10,7 +10,6 @@ const popupScore = document.querySelector("#popup-score");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-// Entity class to represent game entities like the player, enemies, and projectiles
 class Entity {
     constructor(x, y, radius, color, velocity = { x: 0, y: 0 }) {
         this.x = x;
