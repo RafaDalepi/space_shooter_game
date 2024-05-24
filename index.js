@@ -1,7 +1,7 @@
 const canvas = document.querySelector("canvas");
 const context = canvas.getContext("2d");
 
-const StartGameBtn = document.querySelector("#start-game-button");
+const start_game_button = document.querySelector("#start-game-button");
 const Popup = document.querySelector("#popup");
 const scoreEl = document.querySelector("#score");
 const popupScore = document.querySelector("#popup-score");
@@ -31,26 +31,59 @@ class Entity {
     }
 }
 
+class Player extends Entity {
+    constructor(x, y) {
+        super(x, y, 10, "white");
+    }
+    draw() {
+        context.save();
+        context.translate(this.x, this.y);
+        const angle = Math.atan2(mouse_position.y - this.y, mouse_position.x - this.x);
+        context.rotate(angle);
+
+        context.beginPath();
+        context.moveTo(-15, -10);
+        context.lineTo(15, 0);
+        context.lineTo(-15, 10);
+        context.closePath();
+
+        context.fillStyle = this.color;
+        context.fill();
+        context.restore();
+    }
+}
+
 class Upgrade extends Entity {
     constructor(x, y, type) {
         super(x, y, 15, "gold");
         this.type = type;
     }
+    draw() {
+        context.beginPath();
+        const sides = 6;
+        const angle = (Math.PI * 2) / sides;
+        context.moveTo(this.x + this.radius * Math.cos(0), this.y + this.radius * Math.sin(0));
+        for (let i = 1; i <= sides; i++) {
+            context.lineTo(this.x + this.radius * Math.cos(i * angle), this.y + this.radius * Math.sin(i * angle));
+        }
+        context.fillStyle = this.color;
+        context.fill();
+    }
 }
 
-let player = new Entity(canvas.width / 2, canvas.height / 2, 10, "white");
+let player = new Player(canvas.width / 2, canvas.height / 2);
 let projectiles = [];
 let enemies = [];
 let upgrades = [];
-let activeUpgrades = { autoshoot: false, tripleShot: false, doubleDamage: false, piercingShot: false };
+let active_upgrades = { auto_shoot: false, triple_shot: false, double_damage: false, piercing_shot: false };
 let score = 0;
-let spawnEnemies;
+let spawn_enemies;
 let keys = { w: false, a: false, s: false, d: false };
-let lastShotTime = 0;
-const shotInterval = 20; // Interval for autoshooting
-const upgradeDuration = 5000; // Duration for upgrades in milliseconds
-let isMouseDown = false; // Track mouse button state
-let mousePosition = { x: player.x, y: player.y }; // Track mouse position
+let last_shot_time = 0;
+const shot_interval = 10;
+const upgrade_duration = 50000;
+let is_mouse_down = false;
+let mouse_position = { x: player.x, y: player.y };
 
 addEventListener("keydown", ({ key }) => {
     if (keys.hasOwnProperty(key)) keys[key] = true;
@@ -61,23 +94,23 @@ addEventListener("keyup", ({ key }) => {
 });
 
 addEventListener("mousemove", (event) => {
-    mousePosition = { x: event.clientX, y: event.clientY };
+    mouse_position = { x: event.clientX, y: event.clientY };
 });
 
 addEventListener("mousedown", (event) => {
-    isMouseDown = true;
-    if (activeUpgrades.autoshoot) {
-        autoshoot(event);
+    is_mouse_down = true;
+    if (active_upgrades.auto_shoot) {
+        auto_shoot(event);
     } else {
-        shootProjectile(event);
+        shoot_projectile(event);
     }
 });
 
 addEventListener("mouseup", () => {
-    isMouseDown = false;
+    is_mouse_down = false;
 });
 
-function spawnEnemy() {
+function spawn_enemy() {
     const radius = 15 * Math.random() + 10;
     let x, y;
 
@@ -98,56 +131,57 @@ function spawnEnemy() {
 function spawnUpgrade() {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    const types = ["autoshoot", "tripleShot", "doubleDamage", "piercingShot"];
+    const types = ["auto_shoot", "triple_shot", "double_damage", "piercing_shot"];
     const type = types[Math.floor(Math.random() * types.length)];
     upgrades.push(new Upgrade(x, y, type));
 }
 
-function shootProjectile(event) {
+function shoot_projectile(event) {
     const angle = Math.atan2(event.clientY - player.y, event.clientX - player.x);
     const velocity = { x: Math.cos(angle) * 5, y: Math.sin(angle) * 5 };
-    const color = activeUpgrades.doubleDamage ? "red" : "white";
-    const damage = activeUpgrades.doubleDamage ? 2 : 1;
+
+    const color = active_upgrades.double_damage ? "red" : "white";
+    // const damage = active_upgrades.double_damage ? 2 : 1;
 
     projectiles.push(new Entity(player.x, player.y, 5, color, velocity));
 
-    if (activeUpgrades.tripleShot) {
-        const offsetAngle = 0.1; // Small angle offset for side projectiles
-        const leftVelocity = {
-            x: Math.cos(angle - offsetAngle) * 5,
-            y: Math.sin(angle - offsetAngle) * 5
+    if (active_upgrades.triple_shot) {
+        const offset_angle = 0.1;
+        const left_velocity = {
+            x: Math.cos(angle - offset_angle) * 5,
+            y: Math.sin(angle - offset_angle) * 5
         };
-        const rightVelocity = {
-            x: Math.cos(angle + offsetAngle) * 5,
-            y: Math.sin(angle + offsetAngle) * 5
+        const right_velocity = {
+            x: Math.cos(angle + offset_angle) * 5,
+            y: Math.sin(angle + offset_angle) * 5
         };
-        projectiles.push(new Entity(player.x, player.y, 5, color, leftVelocity));
-        projectiles.push(new Entity(player.x, player.y, 5, color, rightVelocity));
+        projectiles.push(new Entity(player.x, player.y, 5, color, left_velocity));
+        projectiles.push(new Entity(player.x, player.y, 5, color, right_velocity));
     }
 }
 
-function autoshoot(event) {
+function auto_shoot(event) {
     const now = Date.now();
-    if (now - lastShotTime > shotInterval && isMouseDown) {
-        shootProjectile(event);
-        lastShotTime = now;
+    if (now - last_shot_time > shot_interval && is_mouse_down) {
+        shoot_projectile(event);
+        last_shot_time = now;
     }
 }
 
-function activateUpgrade(type) {
-    activeUpgrades[type] = true;
-    displayUpgradeInfo(type);
+function activate_upgrade(type) {
+    active_upgrades[type] = true;
+    display_upgrade_info(type);
     setTimeout(() => {
-        activeUpgrades[type] = false;
+        active_upgrades[type] = false;
         hideUpgradeInfo();
-    }, upgradeDuration);
+    }, upgrade_duration);
 }
 
-function displayUpgradeInfo(type) {
+function display_upgrade_info(type) {
     upgradeInfo.style.display = "block";
-    upgradeInfo.innerHTML = `${type} activated for ${upgradeDuration / 1000}s`;
+    upgradeInfo.innerHTML = `${type} activated for ${upgrade_duration / 1000}s`;
 
-    let remainingTime = upgradeDuration / 1000;
+    let remainingTime = upgrade_duration / 1000;
     const interval = setInterval(() => {
         remainingTime -= 1;
         upgradeInfo.innerHTML = `${type} activated for ${remainingTime}s`;
@@ -173,8 +207,8 @@ function animate() {
 
     player.update();
 
-    if (isMouseDown && activeUpgrades.autoshoot) {
-        autoshoot({ clientX: mousePosition.x, clientY: mousePosition.y });
+    if (is_mouse_down && active_upgrades.auto_shoot) {
+        auto_shoot({ clientX: mouse_position.x, clientY: mouse_position.y });
     }
 
     projectiles.forEach((projectile, pidx) => {
@@ -191,14 +225,14 @@ function animate() {
         enemies.forEach((enemy, eidx) => {
             const dist = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
             if (dist - enemy.radius - projectile.radius < 1) {
-                score += (enemy.radius - 10 > 10 ? 100 : 250) * (activeUpgrades.doubleDamage ? 2 : 1);
+                score += (enemy.radius - 10 > 10 ? 100 : 250) * (active_upgrades.double_damage ? 2 : 1);
                 scoreEl.innerHTML = score;
                 if (enemy.radius - 10 > 10) {
                     enemy.radius -= 10;
                 } else {
                     enemies.splice(eidx, 1);
                 }
-                if (!activeUpgrades.piercingShot) {
+                if (!active_upgrades.piercing_shot) {
                     projectiles.splice(pidx, 1);
                 }
             }
@@ -213,7 +247,7 @@ function animate() {
         const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         if (dist - enemy.radius - player.radius < 1) {
             cancelAnimationFrame(animationId);
-            clearInterval(spawnEnemies);
+            clearInterval(spawn_enemies);
             popupScore.innerHTML = score;
             Popup.style.display = "flex";
         }
@@ -224,22 +258,22 @@ function animate() {
 
         const dist = Math.hypot(upgrade.x - player.x, upgrade.y - player.y);
         if (dist - upgrade.radius - player.radius < 1) {
-            activateUpgrade(upgrade.type);
+            activate_upgrade(upgrade.type);
             upgrades.splice(uidx, 1);
         }
     });
 }
 
-StartGameBtn.addEventListener("click", () => {
+start_game_button.addEventListener("click", () => {
     Popup.style.display = "none";
     projectiles = [];
     enemies = [];
     upgrades = [];
     score = 0;
     scoreEl.innerHTML = 0;
-    player = new Entity(canvas.width / 2, canvas.height / 2, 10, "white");
+    player = new Player(canvas.width / 2, canvas.height / 2);
 
     animate();
-    spawnEnemies = setInterval(spawnEnemy, 500);
-    setInterval(spawnUpgrade, 10000); // Spawn an upgrade every 10 seconds
+    spawn_enemies = setInterval(spawn_enemy, 500);
+    setInterval(spawnUpgrade, 100000);
 });
