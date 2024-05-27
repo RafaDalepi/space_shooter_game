@@ -80,10 +80,13 @@ let score = 0;
 let spawn_enemies;
 let keys = { w: false, a: false, s: false, d: false };
 let last_shot_time = 0;
-const shot_interval = 10;
+const shot_interval = 3;
 const upgrade_duration = 50000;
 let is_mouse_down = false;
 let mouse_position = { x: player.x, y: player.y };
+let enemy_delay = 400;
+let powerup_delay = 10000;
+let time_running = 0;
 
 addEventListener("keydown", ({ key }) => {
     if (keys.hasOwnProperty(key)) keys[key] = true;
@@ -114,6 +117,10 @@ function spawn_enemy() {
     const radius = 15 * Math.random() + 10;
     let x, y;
 
+    if (time_running % 150 === 0) {
+        radius == 70;
+    }
+
     if (Math.random() < 0.5) {
         x = Math.random() < 0.5 ? 0 - radius : canvas.width + radius;
         y = Math.random() * canvas.height;
@@ -124,7 +131,12 @@ function spawn_enemy() {
 
     const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
     const angle = Math.atan2(player.y - y, player.x - x);
-    const velocity = { x: Math.cos(angle), y: Math.sin(angle) };
+    var velocity = { x: Math.cos(angle), y: Math.sin(angle) };
+
+    if (time_running % 300 === 0) {
+        velocity = { x: Math.cos(angle) * 0.5, y: Math.sin(angle) * 0.5 };
+    }
+
     enemies.push(new Entity(x, y, radius, color, velocity));
 }
 
@@ -266,7 +278,23 @@ function animate() {
             upgrades.splice(uidx, 1);
         }
     });
+
+    const interval = setInterval(() => {
+        const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        time_running += 1;
+        console.log(time_running);
+
+        if (time_running % 300 === 0) {
+            powerup_delay /= 0.5;
+            enemy_delay /= 0.5;
+        }
+
+        if (dist < 1) {
+            clearInterval(interval);
+        }
+    }, 1000);
 }
+
 
 start_game_button.addEventListener("click", () => {
     Popup.style.display = "none";
@@ -278,6 +306,6 @@ start_game_button.addEventListener("click", () => {
     player = new Player(canvas.width / 2, canvas.height / 2);
 
     animate();
-    spawn_enemies = setInterval(spawn_enemy, 500);
-    setInterval(spawn_upgrade, 100000);
+    spawn_enemies = setInterval(spawn_enemy, enemy_delay);
+    setInterval(spawn_upgrade, powerup_delay);
 });
