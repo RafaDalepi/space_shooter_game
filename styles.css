@@ -1,7 +1,10 @@
+body {
+  font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-size: 18px;
+}
+
 .pad {
   box-sizing: border-box;
-  font-size: 18px;
-  font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   -webkit-user-select: none;         
   -moz-user-select: none; 
   -ms-user-select: none; 
@@ -75,4 +78,12 @@
   font-size: 16px;
   border-radius: 5px;
   display: none;
+}
+
+#high-scores {
+  position: absolute;
+  top: 20px;
+  left: 10px;
+  color: white;
+  z-index: 10;
 }
