@@ -80,13 +80,13 @@ let score = 0;
 let spawn_enemies;
 let keys = { w: false, a: false, s: false, d: false };
 let last_shot_time = 0;
-const shot_interval = 3;
-const upgrade_duration = 50000;
+const shot_interval = 80;
+const upgrade_duration = 5000;
 let is_mouse_down = false;
 let mouse_position = { x: player.x, y: player.y };
-let enemy_delay = 400;
+let enemy_delay = 500;
 let powerup_delay = 10000;
-let time_running = 0;
+// let time_running = 0;
 
 addEventListener("keydown", ({ key }) => {
     if (keys.hasOwnProperty(key)) keys[key] = true;
@@ -117,10 +117,6 @@ function spawn_enemy() {
     const radius = 15 * Math.random() + 10;
     let x, y;
 
-    if (time_running % 150 === 0) {
-        radius == 70;
-    }
-
     if (Math.random() < 0.5) {
         x = Math.random() < 0.5 ? 0 - radius : canvas.width + radius;
         y = Math.random() * canvas.height;
@@ -131,13 +127,32 @@ function spawn_enemy() {
 
     const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
     const angle = Math.atan2(player.y - y, player.x - x);
-    var velocity = { x: Math.cos(angle), y: Math.sin(angle) };
-
-    if (time_running % 300 === 0) {
-        velocity = { x: Math.cos(angle) * 0.5, y: Math.sin(angle) * 0.5 };
-    }
+    const velocity = { x: Math.cos(angle), y: Math.sin(angle) };
 
     enemies.push(new Entity(x, y, radius, color, velocity));
+}
+
+function spawn_boss_increase_difficulty() {
+    const radius = 100;
+    let x, y;
+
+    if (Math.random() < 0.5) {
+        x = Math.random() < 0.5 ? 0 - radius : canvas.width + radius;
+        y = Math.random() * canvas.height;
+    } else {
+        x = Math.random() * canvas.width;
+        y = Math.random() < 0.5 ? 0 - radius : canvas.height + radius;
+    }
+
+    const color = 'red';
+    const angle = Math.atan2(player.y - y, player.x - x);
+    const velocity = { x: Math.cos(angle) * 0.5, y: Math.sin(angle) * 0.5 };
+
+    enemies.push(new Entity(x, y, radius, color, velocity));
+
+    spawn_upgrade /= 0.5;
+    spawn_enemy /= 0.5;
+
 }
 
 function spawn_upgrade() {
@@ -278,23 +293,7 @@ function animate() {
             upgrades.splice(uidx, 1);
         }
     });
-
-    const interval = setInterval(() => {
-        const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-        time_running += 1;
-        console.log(time_running);
-
-        if (time_running % 300 === 0) {
-            powerup_delay /= 0.5;
-            enemy_delay /= 0.5;
-        }
-
-        if (dist < 1) {
-            clearInterval(interval);
-        }
-    }, 1000);
 }
-
 
 start_game_button.addEventListener("click", () => {
     Popup.style.display = "none";
@@ -308,4 +307,8 @@ start_game_button.addEventListener("click", () => {
     animate();
     spawn_enemies = setInterval(spawn_enemy, enemy_delay);
     setInterval(spawn_upgrade, powerup_delay);
+    setInterval(spawn_boss_harder, 150000);
+
+    clearInterval(powerup_delay);
+
 });
