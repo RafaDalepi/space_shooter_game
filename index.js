@@ -6,7 +6,7 @@ const Popup = document.querySelector("#popup");
 const scoreEl = document.querySelector("#score");
 const popupScore = document.querySelector("#popup-score");
 const highScoresEl = document.querySelector("#high-scores");
-const upgrade_info = document.querySelector("#upgrade-info");
+const upgradeInfo = document.querySelector("#upgrade-info");
 
 canvas.width = innerWidth;
 canvas.height = innerHeight;
@@ -76,13 +76,14 @@ let player = new Player(canvas.width / 2, canvas.height / 2);
 let projectiles = [];
 let enemies = [];
 let upgrades = [];
-let active_upgrades = { auto_shoot: false, triple_shot: false, double_damage_and_points: false, piercing_shot: false };
+let active_upgrades = { Tiros_Automaticos: false, Tiros_Triplos: false, Dano_e_Pontos_Duplos: false, Tiro_Penetrante: false };
+let active_upgrades_timers = { Tiros_Automaticos: 0, Tiros_Triplos: 0, Dano_e_Pontos_Duplos: 0, Tiro_Penetrante: 0 };
 let score = 0;
 let spawn_enemies;
 let keys = { w: false, a: false, s: false, d: false };
 let last_shot_time = 0;
 const shot_interval = 80;
-const upgrade_duration = 5000;
+const upgrade_duration = 10000;
 let is_mouse_down = false;
 let mouse_position = { x: player.x, y: player.y };
 let enemy_delay = 500;
@@ -102,8 +103,8 @@ addEventListener("mousemove", (event) => {
 
 addEventListener("mousedown", (event) => {
     is_mouse_down = true;
-    if (active_upgrades.auto_shoot) {
-        auto_shoot(event);
+    if (active_upgrades.Tiros_Automaticos) {
+        Tiros_Automaticos(event);
     } else {
         shoot_projectile(event);
     }
@@ -133,7 +134,7 @@ function spawn_enemy() {
 }
 
 function spawn_boss_increase_difficulty() {
-    const radius = 100;
+    let radius = 50;
     let x, y;
 
     if (Math.random() < 0.5) {
@@ -152,12 +153,15 @@ function spawn_boss_increase_difficulty() {
 
     enemy_delay /= 0.5;
     powerup_delay /= 0.5;
+    if (radius <= 400){
+        radius * 2;
+    }
 }
 
 function spawn_upgrade() {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    const types = ["auto_shoot", "triple_shot", "double_damage_and_points", "piercing_shot"];
+    const types = ["Tiros_Automaticos", "Tiros_Triplos", "Dano_e_Pontos_Duplos", "Tiro_Penetrante"];
     const type = types[Math.floor(Math.random() * types.length)];
     upgrades.push(new Upgrade(x, y, type));
 }
@@ -166,11 +170,11 @@ function shoot_projectile(event) {
     const angle = Math.atan2(event.clientY - player.y, event.clientX - player.x);
     const velocity = { x: Math.cos(angle) * 5, y: Math.sin(angle) * 5 };
 
-    const color = active_upgrades.double_damage_and_points ? "red" : "white";
+    const color = active_upgrades.Dano_e_Pontos_Duplos ? "red" : "white";
 
     projectiles.push(new Entity(player.x, player.y, 5, color, velocity));
 
-    if (active_upgrades.triple_shot) {
+    if (active_upgrades.Tiros_Triplos) {
         const offset_angle = 0.1;
         const left_velocity = {
             x: Math.cos(angle - offset_angle) * 5,
@@ -185,7 +189,7 @@ function shoot_projectile(event) {
     }
 }
 
-function auto_shoot(event) {
+function Tiros_Automaticos(event) {
     const now = Date.now();
     if (now - last_shot_time > shot_interval && is_mouse_down) {
         shoot_projectile(event);
@@ -195,39 +199,59 @@ function auto_shoot(event) {
 
 function activate_upgrade(type) {
     active_upgrades[type] = true;
-    display_upgrade_info(type);
+    active_upgrades_timers[type] = upgrade_duration;
+
+    // Create the popup
+    const upgradePopup = document.createElement("div");
+    upgradePopup.style.position = "fixed";
+    upgradePopup.style.top = "10%";
+    upgradePopup.style.left = "50%";
+    upgradePopup.style.transform = "translateX(-50%)";
+    upgradePopup.style.padding = "10px";
+    upgradePopup.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+    upgradePopup.style.color = "white";
+    upgradePopup.style.border = "2px solid gold";
+    upgradePopup.style.borderRadius = "5px";
+    upgradePopup.style.zIndex = "1000";
+    document.body.appendChild(upgradePopup);
+
+    let remainingTime = upgrade_duration / 1000;
+    upgradePopup.innerText = `${type} - ${remainingTime}s`;
+
+    const countdownInterval = setInterval(() => {
+        remainingTime -= 1;
+        upgradePopup.innerText = `${type.replace('_', ' ')} - ${remainingTime}s`;
+
+        if (remainingTime <= 0) {
+            clearInterval(countdownInterval);
+            document.body.removeChild(upgradePopup);
+        }
+    }, 1000);
+
     setTimeout(() => {
         active_upgrades[type] = false;
-        hide_upgrade_info();
+        display_upgrade_info(type);
     }, upgrade_duration);
 }
 
 function display_upgrade_info(type) {
-    upgrade_info.style.display = "block";
-    upgrade_info.innerHTML = `${type} time remaining: ${upgrade_duration / 1000}s`;
-
-    let remaining_time = upgrade_duration / 1000;
-    const interval = setInterval(() => {
-        remaining_time -= 1;
-        upgrade_info.innerHTML = `${type} time remaining: ${remaining_time}s`;
-        if (remaining_time <= 0) {
-            clearInterval(interval);
-        }
-    }, 1000);
+    const info = {
+        Tiros_Automaticos: "Auto Shoot: Automatically shoot projectiles",
+        Tiros_Triplos: "Triple Shot: Shoot 3 projectiles at once",
+        Dano_e_Pontos_Duplos: "Double Damage & Points: Deal double damage and earn double points",
+        Tiro_Penetrante: "Piercing Shot: Projectiles pierce through enemies"
+    };
+    upgradeInfo.innerHTML = info[type];
 }
 
-function hide_upgrade_info() {
-    upgrade_info.style.display = "none";
-}
-
-function saveScore(name, score) {
+function save_score(name, score) {
     let scores = JSON.parse(localStorage.getItem("scores")) || [];
     scores.push({ name, score });
     scores.sort((a, b) => b.score - a.score);
     localStorage.setItem("scores", JSON.stringify(scores));
 }
 
-function displayHighScores() {
+function display_high_scores() {
     let scores = JSON.parse(localStorage.getItem("scores")) || [];
     highScoresEl.innerHTML = scores.slice(0, 10).map((entry, index) => `${index + 1}. ${entry.name} - ${entry.score}`).join("<br>");
 }
@@ -241,11 +265,13 @@ function animate() {
 
     player.velocity.x = keys.d ? speed : keys.a ? -speed : 0;
     player.velocity.y = keys.s ? speed : keys.w ? -speed : 0;
+    player.x = (player.x + canvas.width) % canvas.width || canvas.width;
+    player.y = (player.y + canvas.height) % canvas.height || canvas.height;
 
     player.update();
 
-    if (is_mouse_down && active_upgrades.auto_shoot) {
-        auto_shoot({ clientX: mouse_position.x, clientY: mouse_position.y });
+    if (is_mouse_down && active_upgrades.Tiros_Automaticos) {
+        Tiros_Automaticos({ clientX: mouse_position.x, clientY: mouse_position.y });
     }
 
     projectiles.forEach((projectile, pidx) => {
@@ -263,10 +289,10 @@ function animate() {
             const dist = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
             if (dist - enemy.radius - projectile.radius < 1) {
 
-                score += (enemy.radius - 10 > 10 ? 100 : 250) * (active_upgrades.double_damage_and_points ? 2 : 1);
+                score += (enemy.radius - 10 > 10 ? 100 : 250) * (active_upgrades.Dano_e_Pontos_Duplos ? 2 : 1);
                 scoreEl.innerHTML = score;
 
-                const damage = active_upgrades.double_damage_and_points ? 20 : 10;
+                const damage = active_upgrades.Dano_e_Pontos_Duplos ? 20 : 10;
 
                 if (enemy.radius - damage > 10) {
                     enemy.radius -= 10;
@@ -274,7 +300,7 @@ function animate() {
                     enemies.splice(eidx, 1);
                 }
 
-                if (!active_upgrades.piercing_shot) {
+                if (!active_upgrades.Tiro_Penetrante) {
                     projectiles.splice(pidx, 1);
                 }
             }
@@ -293,8 +319,8 @@ function animate() {
             popupScore.innerHTML = score;
             Popup.style.display = "flex";
             const name = prompt("Enter your name:");
-            saveScore(name, score);
-            displayHighScores();
+            save_score(name, score);
+            display_high_scores();
         }
     });
 
@@ -307,6 +333,7 @@ function animate() {
             upgrades.splice(uidx, 1);
         }
     });
+
 }
 
 start_game_button.addEventListener("click", () => {
@@ -325,5 +352,7 @@ start_game_button.addEventListener("click", () => {
 
     clearInterval(powerup_delay);
     clearInterval(enemy_delay);
-    displayHighScores();
+    display_high_scores();
 });
+
+display_high_scores();
