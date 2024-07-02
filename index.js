@@ -344,12 +344,15 @@ start_game_button.addEventListener("click", () => {
     score = 0;
     scoreEl.innerHTML = 0;
     player = new Player(canvas.width / 2, canvas.height / 2);
-
+    
+    enemy_delay = 500;
+    powerup_delay = 10000;
+    
     animate();
     spawn_enemies = setInterval(spawn_enemy, enemy_delay);
     setInterval(spawn_upgrade, powerup_delay);
     setInterval(spawn_boss_increase_difficulty, 150000);
-
+    
     clearInterval(powerup_delay);
     clearInterval(enemy_delay);
     display_high_scores();
