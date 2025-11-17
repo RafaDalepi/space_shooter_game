@@ -80,12 +80,15 @@ let activeUpgrades = { autoShoot: false, tripleShot: false, doubleDamageAndPoint
 let activeUpgradeTimers = { autoShoot: 0, tripleShot: 0, doubleDamageAndPoints: 0, piercingShot: 0 };
 let score = 0;
 let spawnEnemiesInterval;
+let spawnUpgradesInterval;
+let spawnBossInterval;
+let animationId;
 let keys = { w: false, a: false, s: false, d: false };
 let lastShotTime = 0;
 const shotInterval = 80;
 const upgradeDuration = 10000;
 let isMouseDown = false;
-let mousePosition = { x: player.x, y: player.y };
+let mousePosition = { x: canvas.width / 2, y: canvas.height / 2 };
 let enemySpawnDelay = 500;
 let powerUpSpawnDelay = 10000;
 
@@ -151,11 +154,10 @@ function spawnBossAndIncreaseDifficulty() {
 
     enemies.push(new Entity(x, y, radius, color, velocity));
 
-    enemySpawnDelay /= 0.5;
-    powerUpSpawnDelay /= 0.5;
-    if (radius <= 400){
-        radius * 2;
-    }
+    // Increase difficulty by reducing spawn delays (multiply by 0.5 to make faster)
+    enemySpawnDelay *= 0.5;
+    powerUpSpawnDelay *= 0.5;
+    // Note: radius modification removed as it had no effect on spawned enemy
 }
 
 function spawnUpgrade() {
@@ -274,8 +276,11 @@ function animate() {
         autoShoot({ clientX: mousePosition.x, clientY: mousePosition.y });
     }
 
-    projectiles.forEach((projectile, projectileIndex) => {
+    // Use backward loop to safely remove items while iterating
+    for (let projectileIndex = projectiles.length - 1; projectileIndex >= 0; projectileIndex--) {
+        const projectile = projectiles[projectileIndex];
         projectile.update();
+        
         if (
             projectile.x + projectile.radius < 0 ||
             projectile.y + projectile.radius < 0 ||
@@ -283,9 +288,11 @@ function animate() {
             projectile.y - projectile.radius > canvas.height
         ) {
             projectiles.splice(projectileIndex, 1);
+            continue;
         }
 
-        enemies.forEach((enemy, enemyIndex) => {
+        for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
+            const enemy = enemies[enemyIndex];
             const distance = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
             if (distance - enemy.radius - projectile.radius < 1) {
 
@@ -302,10 +309,11 @@ function animate() {
 
                 if (!activeUpgrades.piercingShot) {
                     projectiles.splice(projectileIndex, 1);
+                    break; // Exit inner loop after removing projectile
                 }
             }
-        });
-    });
+        }
+    }
 
     enemies.forEach((enemy) => {
         const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
@@ -324,7 +332,9 @@ function animate() {
         }
     });
 
-    upgrades.forEach((upgrade, upgradeIndex) => {
+    // Use backward loop to safely remove items while iterating
+    for (let upgradeIndex = upgrades.length - 1; upgradeIndex >= 0; upgradeIndex--) {
+        const upgrade = upgrades[upgradeIndex];
         upgrade.update();
 
         const distance = Math.hypot(upgrade.x - player.x, upgrade.y - player.y);
@@ -332,12 +342,28 @@ function animate() {
             activateUpgrade(upgrade.type);
             upgrades.splice(upgradeIndex, 1);
         }
-    });
+    }
 
 }
 
 startGameButton.addEventListener("click", () => {
     popupElement.style.display = "none";
+    
+    // Clear any existing game intervals and animation
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+    }
+    if (spawnEnemiesInterval) {
+        clearInterval(spawnEnemiesInterval);
+    }
+    if (spawnUpgradesInterval) {
+        clearInterval(spawnUpgradesInterval);
+    }
+    if (spawnBossInterval) {
+        clearInterval(spawnBossInterval);
+    }
+    
+    // Reset game state
     projectiles = [];
     enemies = [];
     upgrades = [];
@@ -348,13 +374,12 @@ startGameButton.addEventListener("click", () => {
     enemySpawnDelay = 500;
     powerUpSpawnDelay = 10000;
     
+    // Start new game
     animate();
     spawnEnemiesInterval = setInterval(spawnEnemy, enemySpawnDelay);
-    setInterval(spawnUpgrade, powerUpSpawnDelay);
-    setInterval(spawnBossAndIncreaseDifficulty, 150000);
+    spawnUpgradesInterval = setInterval(spawnUpgrade, powerUpSpawnDelay);
+    spawnBossInterval = setInterval(spawnBossAndIncreaseDifficulty, 150000);
     
-    clearInterval(powerUpSpawnDelay);
-    clearInterval(enemySpawnDelay);
     displayHighScores();
 });
 
