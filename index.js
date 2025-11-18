@@ -1,12 +1,12 @@
 const canvas = document.querySelector("canvas");
 const context = canvas.getContext("2d");
 
-const start_game_button = document.querySelector("#start-game-button");
-const Popup = document.querySelector("#popup");
-const scoreEl = document.querySelector("#score");
-const popupScore = document.querySelector("#popup-score");
-const highScoresEl = document.querySelector("#high-scores");
-const upgradeInfo = document.querySelector("#upgrade-info");
+const startGameButton = document.querySelector("#start-game-button");
+const popupElement = document.querySelector("#popup");
+const scoreElement = document.querySelector("#score");
+const popupScoreElement = document.querySelector("#popup-score");
+const highScoresElement = document.querySelector("#high-scores");
+const upgradeInfoElement = document.querySelector("#upgrade-info");
 
 canvas.width = innerWidth;
 canvas.height = innerHeight;
@@ -39,7 +39,7 @@ class Player extends Entity {
     draw() {
         context.save();
         context.translate(this.x, this.y);
-        const angle = Math.atan2(mouse_position.y - this.y, mouse_position.x - this.x);
+        const angle = Math.atan2(mousePosition.y - this.y, mousePosition.x - this.x);
         context.rotate(angle);
 
         context.beginPath();
@@ -76,18 +76,21 @@ let player = new Player(canvas.width / 2, canvas.height / 2);
 let projectiles = [];
 let enemies = [];
 let upgrades = [];
-let active_upgrades = { Tiros_Automaticos: false, Tiros_Triplos: false, Dano_e_Pontos_Duplos: false, Tiro_Penetrante: false };
-let active_upgrades_timers = { Tiros_Automaticos: 0, Tiros_Triplos: 0, Dano_e_Pontos_Duplos: 0, Tiro_Penetrante: 0 };
+let activeUpgrades = { autoShoot: false, tripleShot: false, doubleDamageAndPoints: false, piercingShot: false };
+let activeUpgradeTimers = { autoShoot: 0, tripleShot: 0, doubleDamageAndPoints: 0, piercingShot: 0 };
 let score = 0;
-let spawn_enemies;
+let spawnEnemiesInterval;
+let spawnUpgradesInterval;
+let spawnBossInterval;
+let animationId;
 let keys = { w: false, a: false, s: false, d: false };
-let last_shot_time = 0;
-const shot_interval = 80;
-const upgrade_duration = 10000;
-let is_mouse_down = false;
-let mouse_position = { x: player.x, y: player.y };
-let enemy_delay = 500;
-let powerup_delay = 10000;
+let lastShotTime = 0;
+const shotInterval = 80;
+const upgradeDuration = 10000;
+let isMouseDown = false;
+let mousePosition = { x: canvas.width / 2, y: canvas.height / 2 };
+let enemySpawnDelay = 500;
+let powerUpSpawnDelay = 10000;
 
 addEventListener("keydown", ({ key }) => {
     if (keys.hasOwnProperty(key)) keys[key] = true;
@@ -98,23 +101,23 @@ addEventListener("keyup", ({ key }) => {
 });
 
 addEventListener("mousemove", (event) => {
-    mouse_position = { x: event.clientX, y: event.clientY };
+    mousePosition = { x: event.clientX, y: event.clientY };
 });
 
 addEventListener("mousedown", (event) => {
-    is_mouse_down = true;
-    if (active_upgrades.Tiros_Automaticos) {
-        Tiros_Automaticos(event);
+    isMouseDown = true;
+    if (activeUpgrades.autoShoot) {
+        autoShoot(event);
     } else {
-        shoot_projectile(event);
+        shootProjectile(event);
     }
 });
 
 addEventListener("mouseup", () => {
-    is_mouse_down = false;
+    isMouseDown = false;
 });
 
-function spawn_enemy() {
+function spawnEnemy() {
     const radius = 15 * Math.random() + 10;
     let x, y;
 
@@ -133,7 +136,7 @@ function spawn_enemy() {
     enemies.push(new Entity(x, y, radius, color, velocity));
 }
 
-function spawn_boss_increase_difficulty() {
+function spawnBossAndIncreaseDifficulty() {
     let radius = 50;
     let x, y;
 
@@ -151,55 +154,54 @@ function spawn_boss_increase_difficulty() {
 
     enemies.push(new Entity(x, y, radius, color, velocity));
 
-    enemy_delay /= 0.5;
-    powerup_delay /= 0.5;
-    if (radius <= 400){
-        radius * 2;
-    }
+    // Increase difficulty by reducing spawn delays (multiply by 0.5 to make faster)
+    enemySpawnDelay *= 0.5;
+    powerUpSpawnDelay *= 0.5;
+    // Note: radius modification removed as it had no effect on spawned enemy
 }
 
-function spawn_upgrade() {
+function spawnUpgrade() {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    const types = ["Tiros_Automaticos", "Tiros_Triplos", "Dano_e_Pontos_Duplos", "Tiro_Penetrante"];
+    const types = ["autoShoot", "tripleShot", "doubleDamageAndPoints", "piercingShot"];
     const type = types[Math.floor(Math.random() * types.length)];
     upgrades.push(new Upgrade(x, y, type));
 }
 
-function shoot_projectile(event) {
+function shootProjectile(event) {
     const angle = Math.atan2(event.clientY - player.y, event.clientX - player.x);
     const velocity = { x: Math.cos(angle) * 5, y: Math.sin(angle) * 5 };
 
-    const color = active_upgrades.Dano_e_Pontos_Duplos ? "red" : "white";
+    const color = activeUpgrades.doubleDamageAndPoints ? "red" : "white";
 
     projectiles.push(new Entity(player.x, player.y, 5, color, velocity));
 
-    if (active_upgrades.Tiros_Triplos) {
-        const offset_angle = 0.1;
-        const left_velocity = {
-            x: Math.cos(angle - offset_angle) * 5,
-            y: Math.sin(angle - offset_angle) * 5
+    if (activeUpgrades.tripleShot) {
+        const offsetAngle = 0.1;
+        const leftVelocity = {
+            x: Math.cos(angle - offsetAngle) * 5,
+            y: Math.sin(angle - offsetAngle) * 5
         };
-        const right_velocity = {
-            x: Math.cos(angle + offset_angle) * 5,
-            y: Math.sin(angle + offset_angle) * 5
+        const rightVelocity = {
+            x: Math.cos(angle + offsetAngle) * 5,
+            y: Math.sin(angle + offsetAngle) * 5
         };
-        projectiles.push(new Entity(player.x, player.y, 5, color, left_velocity));
-        projectiles.push(new Entity(player.x, player.y, 5, color, right_velocity));
+        projectiles.push(new Entity(player.x, player.y, 5, color, leftVelocity));
+        projectiles.push(new Entity(player.x, player.y, 5, color, rightVelocity));
     }
 }
 
-function Tiros_Automaticos(event) {
+function autoShoot(event) {
     const now = Date.now();
-    if (now - last_shot_time > shot_interval && is_mouse_down) {
-        shoot_projectile(event);
-        last_shot_time = now;
+    if (now - lastShotTime > shotInterval && isMouseDown) {
+        shootProjectile(event);
+        lastShotTime = now;
     }
 }
 
-function activate_upgrade(type) {
-    active_upgrades[type] = true;
-    active_upgrades_timers[type] = upgrade_duration;
+function activateUpgrade(type) {
+    activeUpgrades[type] = true;
+    activeUpgradeTimers[type] = upgradeDuration;
 
     // Create the popup
     const upgradePopup = document.createElement("div");
@@ -215,12 +217,12 @@ function activate_upgrade(type) {
     upgradePopup.style.zIndex = "1000";
     document.body.appendChild(upgradePopup);
 
-    let remainingTime = upgrade_duration / 1000;
+    let remainingTime = upgradeDuration / 1000;
     upgradePopup.innerText = `${type} - ${remainingTime}s`;
 
     const countdownInterval = setInterval(() => {
         remainingTime -= 1;
-        upgradePopup.innerText = `${type.replace('_', ' ')} - ${remainingTime}s`;
+        upgradePopup.innerText = `${type.replace(/([A-Z])/g, ' $1').trim()} - ${remainingTime}s`;
 
         if (remainingTime <= 0) {
             clearInterval(countdownInterval);
@@ -229,31 +231,31 @@ function activate_upgrade(type) {
     }, 1000);
 
     setTimeout(() => {
-        active_upgrades[type] = false;
-        display_upgrade_info(type);
-    }, upgrade_duration);
+        activeUpgrades[type] = false;
+        displayUpgradeInfo(type);
+    }, upgradeDuration);
 }
 
-function display_upgrade_info(type) {
+function displayUpgradeInfo(type) {
     const info = {
-        Tiros_Automaticos: "Auto Shoot: Automatically shoot projectiles",
-        Tiros_Triplos: "Triple Shot: Shoot 3 projectiles at once",
-        Dano_e_Pontos_Duplos: "Double Damage & Points: Deal double damage and earn double points",
-        Tiro_Penetrante: "Piercing Shot: Projectiles pierce through enemies"
+        autoShoot: "Auto Shoot: Automatically shoot projectiles",
+        tripleShot: "Triple Shot: Shoot 3 projectiles at once",
+        doubleDamageAndPoints: "Double Damage & Points: Deal double damage and earn double points",
+        piercingShot: "Piercing Shot: Projectiles pierce through enemies"
     };
-    upgradeInfo.innerHTML = info[type];
+    upgradeInfoElement.innerHTML = info[type];
 }
 
-function save_score(name, score) {
+function saveScore(name, score) {
     let scores = JSON.parse(localStorage.getItem("scores")) || [];
     scores.push({ name, score });
     scores.sort((a, b) => b.score - a.score);
     localStorage.setItem("scores", JSON.stringify(scores));
 }
 
-function display_high_scores() {
+function displayHighScores() {
     let scores = JSON.parse(localStorage.getItem("scores")) || [];
-    highScoresEl.innerHTML = scores.slice(0, 10).map((entry, index) => `${index + 1}. ${entry.name} - ${entry.score}`).join("<br>");
+    highScoresElement.innerHTML = scores.slice(0, 10).map((entry, index) => `${index + 1}. ${entry.name} - ${entry.score}`).join("<br>");
 }
 
 function animate() {
@@ -270,92 +272,115 @@ function animate() {
 
     player.update();
 
-    if (is_mouse_down && active_upgrades.Tiros_Automaticos) {
-        Tiros_Automaticos({ clientX: mouse_position.x, clientY: mouse_position.y });
+    if (isMouseDown && activeUpgrades.autoShoot) {
+        autoShoot({ clientX: mousePosition.x, clientY: mousePosition.y });
     }
 
-    projectiles.forEach((projectile, pidx) => {
+    // Use backward loop to safely remove items while iterating
+    for (let projectileIndex = projectiles.length - 1; projectileIndex >= 0; projectileIndex--) {
+        const projectile = projectiles[projectileIndex];
         projectile.update();
+        
         if (
             projectile.x + projectile.radius < 0 ||
             projectile.y + projectile.radius < 0 ||
             projectile.x - projectile.radius > canvas.width ||
             projectile.y - projectile.radius > canvas.height
         ) {
-            projectiles.splice(pidx, 1);
+            projectiles.splice(projectileIndex, 1);
+            continue;
         }
 
-        enemies.forEach((enemy, eidx) => {
-            const dist = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
-            if (dist - enemy.radius - projectile.radius < 1) {
+        for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
+            const enemy = enemies[enemyIndex];
+            const distance = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
+            if (distance - enemy.radius - projectile.radius < 1) {
 
-                score += (enemy.radius - 10 > 10 ? 100 : 250) * (active_upgrades.Dano_e_Pontos_Duplos ? 2 : 1);
-                scoreEl.innerHTML = score;
+                score += (enemy.radius - 10 > 10 ? 100 : 250) * (activeUpgrades.doubleDamageAndPoints ? 2 : 1);
+                scoreElement.innerHTML = score;
 
-                const damage = active_upgrades.Dano_e_Pontos_Duplos ? 20 : 10;
+                const damage = activeUpgrades.doubleDamageAndPoints ? 20 : 10;
 
                 if (enemy.radius - damage > 10) {
                     enemy.radius -= 10;
                 } else {
-                    enemies.splice(eidx, 1);
+                    enemies.splice(enemyIndex, 1);
                 }
 
-                if (!active_upgrades.Tiro_Penetrante) {
-                    projectiles.splice(pidx, 1);
+                if (!activeUpgrades.piercingShot) {
+                    projectiles.splice(projectileIndex, 1);
+                    break; // Exit inner loop after removing projectile
                 }
             }
-        });
-    });
+        }
+    }
 
     enemies.forEach((enemy) => {
         const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
         enemy.velocity = { x: Math.cos(angle), y: Math.sin(angle) };
         enemy.update();
 
-        const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-        if (dist - enemy.radius - player.radius < 1) {
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (distance - enemy.radius - player.radius < 1) {
             cancelAnimationFrame(animationId);
-            clearInterval(spawn_enemies);
-            popupScore.innerHTML = score;
-            Popup.style.display = "flex";
+            clearInterval(spawnEnemiesInterval);
+            popupScoreElement.innerHTML = score;
+            popupElement.style.display = "flex";
             const name = prompt("Enter your name:");
-            save_score(name, score);
-            display_high_scores();
+            saveScore(name, score);
+            displayHighScores();
         }
     });
 
-    upgrades.forEach((upgrade, uidx) => {
+    // Use backward loop to safely remove items while iterating
+    for (let upgradeIndex = upgrades.length - 1; upgradeIndex >= 0; upgradeIndex--) {
+        const upgrade = upgrades[upgradeIndex];
         upgrade.update();
 
-        const dist = Math.hypot(upgrade.x - player.x, upgrade.y - player.y);
-        if (dist - upgrade.radius - player.radius < 1) {
-            activate_upgrade(upgrade.type);
-            upgrades.splice(uidx, 1);
+        const distance = Math.hypot(upgrade.x - player.x, upgrade.y - player.y);
+        if (distance - upgrade.radius - player.radius < 1) {
+            activateUpgrade(upgrade.type);
+            upgrades.splice(upgradeIndex, 1);
         }
-    });
+    }
 
 }
 
-start_game_button.addEventListener("click", () => {
-    Popup.style.display = "none";
+startGameButton.addEventListener("click", () => {
+    popupElement.style.display = "none";
+    
+    // Clear any existing game intervals and animation
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+    }
+    if (spawnEnemiesInterval) {
+        clearInterval(spawnEnemiesInterval);
+    }
+    if (spawnUpgradesInterval) {
+        clearInterval(spawnUpgradesInterval);
+    }
+    if (spawnBossInterval) {
+        clearInterval(spawnBossInterval);
+    }
+    
+    // Reset game state
     projectiles = [];
     enemies = [];
     upgrades = [];
     score = 0;
-    scoreEl.innerHTML = 0;
+    scoreElement.innerHTML = 0;
     player = new Player(canvas.width / 2, canvas.height / 2);
     
-    enemy_delay = 500;
-    powerup_delay = 10000;
+    enemySpawnDelay = 500;
+    powerUpSpawnDelay = 10000;
     
+    // Start new game
     animate();
-    spawn_enemies = setInterval(spawn_enemy, enemy_delay);
-    setInterval(spawn_upgrade, powerup_delay);
-    setInterval(spawn_boss_increase_difficulty, 150000);
+    spawnEnemiesInterval = setInterval(spawnEnemy, enemySpawnDelay);
+    spawnUpgradesInterval = setInterval(spawnUpgrade, powerUpSpawnDelay);
+    spawnBossInterval = setInterval(spawnBossAndIncreaseDifficulty, 150000);
     
-    clearInterval(powerup_delay);
-    clearInterval(enemy_delay);
-    display_high_scores();
+    displayHighScores();
 });
 
-display_high_scores();
+displayHighScores();
