@@ -77,7 +77,10 @@ let projectiles = [];
 let enemies = [];
 let upgrades = [];
 let activeUpgrades = { autoShoot: false, tripleShot: false, doubleDamageAndPoints: false, piercingShot: false };
-let activeUpgradeTimers = { autoShoot: 0, tripleShot: 0, doubleDamageAndPoints: 0, piercingShot: 0 };
+let activeUpgradeTimers = { autoShoot: null, tripleShot: null, doubleDamageAndPoints: null, piercingShot: null };
+let upgradeExpiresAt = { autoShoot: 0, tripleShot: 0, doubleDamageAndPoints: 0, piercingShot: 0 };
+let upgradePopups = { autoShoot: null, tripleShot: null, doubleDamageAndPoints: null, piercingShot: null };
+let isGameRunning = false;
 let score = 0;
 let spawnEnemiesInterval;
 let spawnUpgradesInterval;
@@ -105,6 +108,7 @@ addEventListener("mousemove", (event) => {
 });
 
 addEventListener("mousedown", (event) => {
+    if (!isGameRunning || event.button !== 0) return;
     isMouseDown = true;
     if (activeUpgrades.autoShoot) {
         autoShoot(event);
@@ -152,12 +156,17 @@ function spawnBossAndIncreaseDifficulty() {
     const angle = Math.atan2(player.y - y, player.x - x);
     const velocity = { x: Math.cos(angle) * 0.5, y: Math.sin(angle) * 0.5 };
 
-    enemies.push(new Entity(x, y, radius, color, velocity));
+    const boss = new Entity(x, y, radius, color, velocity);
+    boss.speed = 0.5;
+    enemies.push(boss);
 
-    // Increase difficulty by reducing spawn delays (multiply by 0.5 to make faster)
-    enemySpawnDelay *= 0.5;
-    powerUpSpawnDelay *= 0.5;
-    // Note: radius modification removed as it had no effect on spawned enemy
+    // setInterval does not respond to changes in the delay variables.
+    enemySpawnDelay = Math.max(100, enemySpawnDelay * 0.5);
+    powerUpSpawnDelay = Math.max(1000, powerUpSpawnDelay * 0.5);
+    clearInterval(spawnEnemiesInterval);
+    clearInterval(spawnUpgradesInterval);
+    spawnEnemiesInterval = setInterval(spawnEnemy, enemySpawnDelay);
+    spawnUpgradesInterval = setInterval(spawnUpgrade, powerUpSpawnDelay);
 }
 
 function spawnUpgrade() {
@@ -169,25 +178,26 @@ function spawnUpgrade() {
 }
 
 function shootProjectile(event) {
-    const angle = Math.atan2(event.clientY - player.y, event.clientX - player.x);
-    const velocity = { x: Math.cos(angle) * 5, y: Math.sin(angle) * 5 };
+    if (!isGameRunning) return;
 
+    const angle = Math.atan2(event.clientY - player.y, event.clientX - player.x);
     const color = activeUpgrades.doubleDamageAndPoints ? "red" : "white";
 
-    projectiles.push(new Entity(player.x, player.y, 5, color, velocity));
+    function fireAtAngle(shotAngle) {
+        const velocity = { x: Math.cos(shotAngle) * 5, y: Math.sin(shotAngle) * 5 };
+        const projectile = new Entity(player.x, player.y, 5, color, velocity);
+        // Capture power-ups when fired rather than changing bullets in flight.
+        projectile.damage = activeUpgrades.doubleDamageAndPoints ? 20 : 10;
+        projectile.scoreMultiplier = activeUpgrades.doubleDamageAndPoints ? 2 : 1;
+        projectile.piercing = activeUpgrades.piercingShot;
+        projectile.hitEnemies = new WeakSet();
+        projectiles.push(projectile);
+    }
 
+    fireAtAngle(angle);
     if (activeUpgrades.tripleShot) {
-        const offsetAngle = 0.1;
-        const leftVelocity = {
-            x: Math.cos(angle - offsetAngle) * 5,
-            y: Math.sin(angle - offsetAngle) * 5
-        };
-        const rightVelocity = {
-            x: Math.cos(angle + offsetAngle) * 5,
-            y: Math.sin(angle + offsetAngle) * 5
-        };
-        projectiles.push(new Entity(player.x, player.y, 5, color, leftVelocity));
-        projectiles.push(new Entity(player.x, player.y, 5, color, rightVelocity));
+        fireAtAngle(angle - 0.1);
+        fireAtAngle(angle + 0.1);
     }
 }
 
@@ -199,68 +209,112 @@ function autoShoot(event) {
     }
 }
 
-function activateUpgrade(type) {
-    activeUpgrades[type] = true;
-    activeUpgradeTimers[type] = upgradeDuration;
+const upgradeLabels = {
+    autoShoot: "Auto Shoot",
+    tripleShot: "Triple Shot",
+    doubleDamageAndPoints: "Double Damage & Points",
+    piercingShot: "Piercing Shot"
+};
 
-    // Create the popup
-    const upgradePopup = document.createElement("div");
-    upgradePopup.style.position = "fixed";
-    upgradePopup.style.top = "10%";
-    upgradePopup.style.left = "50%";
-    upgradePopup.style.transform = "translateX(-50%)";
-    upgradePopup.style.padding = "10px";
-    upgradePopup.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
-    upgradePopup.style.color = "white";
-    upgradePopup.style.border = "2px solid gold";
-    upgradePopup.style.borderRadius = "5px";
-    upgradePopup.style.zIndex = "1000";
-    document.body.appendChild(upgradePopup);
-
-    let remainingTime = upgradeDuration / 1000;
-    upgradePopup.innerText = `${type} - ${remainingTime}s`;
-
-    const countdownInterval = setInterval(() => {
-        remainingTime -= 1;
-        upgradePopup.innerText = `${type.replace(/([A-Z])/g, ' $1').trim()} - ${remainingTime}s`;
-
-        if (remainingTime <= 0) {
-            clearInterval(countdownInterval);
-            document.body.removeChild(upgradePopup);
-        }
-    }, 1000);
-
-    setTimeout(() => {
-        activeUpgrades[type] = false;
-        displayUpgradeInfo(type);
-    }, upgradeDuration);
+function displayUpgradeInfo() {
+    const active = Object.keys(activeUpgrades).filter((type) => activeUpgrades[type]);
+    upgradeInfoElement.textContent = active.map((type) => upgradeLabels[type]).join(" | ");
 }
 
-function displayUpgradeInfo(type) {
-    const info = {
-        autoShoot: "Auto Shoot: Automatically shoot projectiles",
-        tripleShot: "Triple Shot: Shoot 3 projectiles at once",
-        doubleDamageAndPoints: "Double Damage & Points: Deal double damage and earn double points",
-        piercingShot: "Piercing Shot: Projectiles pierce through enemies"
-    };
-    upgradeInfoElement.innerHTML = info[type];
+function updateUpgradePopups() {
+    for (const type of Object.keys(upgradePopups)) {
+        const popup = upgradePopups[type];
+        if (popup) {
+            const seconds = Math.max(0, Math.ceil((upgradeExpiresAt[type] - Date.now()) / 1000));
+            popup.textContent = `${upgradeLabels[type]} - ${seconds}s`;
+        }
+    }
+}
+
+function resetUpgrades() {
+    for (const type of Object.keys(activeUpgrades)) {
+        clearTimeout(activeUpgradeTimers[type]);
+        activeUpgradeTimers[type] = null;
+        activeUpgrades[type] = false;
+        upgradeExpiresAt[type] = 0;
+        if (upgradePopups[type]) upgradePopups[type].remove();
+        upgradePopups[type] = null;
+    }
+    displayUpgradeInfo();
+}
+
+function activateUpgrade(type) {
+    if (!isGameRunning) return;
+
+    clearTimeout(activeUpgradeTimers[type]);
+    activeUpgrades[type] = true;
+    upgradeExpiresAt[type] = Date.now() + upgradeDuration;
+
+    // Collecting the same power-up again refreshes its timeout.
+    if (!upgradePopups[type]) {
+        const popup = document.createElement("div");
+        popup.style.position = "fixed";
+        popup.style.top = "10%";
+        popup.style.left = "50%";
+        popup.style.transform = "translateX(-50%)";
+        popup.style.padding = "10px";
+        popup.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+        popup.style.color = "white";
+        popup.style.border = "2px solid gold";
+        popup.style.borderRadius = "5px";
+        popup.style.zIndex = "1000";
+        document.body.appendChild(popup);
+        upgradePopups[type] = popup;
+    }
+
+    activeUpgradeTimers[type] = setTimeout(() => {
+        if (!isGameRunning) return;
+        activeUpgrades[type] = false;
+        activeUpgradeTimers[type] = null;
+        upgradeExpiresAt[type] = 0;
+        upgradePopups[type]?.remove();
+        upgradePopups[type] = null;
+        displayUpgradeInfo();
+    }, upgradeDuration);
+
+    updateUpgradePopups();
+    displayUpgradeInfo();
+}
+
+function loadScores() {
+    try {
+        const scores = JSON.parse(localStorage.getItem("scores"));
+        return Array.isArray(scores) ? scores : [];
+    } catch {
+        return [];
+    }
 }
 
 function saveScore(name, score) {
-    let scores = JSON.parse(localStorage.getItem("scores")) || [];
+    const scores = loadScores();
     scores.push({ name, score });
     scores.sort((a, b) => b.score - a.score);
-    localStorage.setItem("scores", JSON.stringify(scores));
+    try {
+        localStorage.setItem("scores", JSON.stringify(scores));
+    } catch {
+        // Blocked or unavailable storage must not interrupt gameplay.
+    }
 }
 
 function displayHighScores() {
-    let scores = JSON.parse(localStorage.getItem("scores")) || [];
-    highScoresElement.innerHTML = scores.slice(0, 10).map((entry, index) => `${index + 1}. ${entry.name} - ${entry.score}`).join("<br>");
+    const scores = loadScores();
+    highScoresElement.replaceChildren(...scores.slice(0, 10).map((entry, index) => {
+        const row = document.createElement("div");
+        row.textContent = `${index + 1}. ${entry.name} - ${entry.score}`;
+        return row;
+    }));
 }
 
 function animate() {
+    if (!isGameRunning) return;
     const speed = 2;
     animationId = requestAnimationFrame(animate);
+    updateUpgradePopups();
 
     context.fillStyle = "rgba(0,0,0, 0.1)";
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -294,43 +348,38 @@ function animate() {
         for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
             const enemy = enemies[enemyIndex];
             const distance = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
-            if (distance - enemy.radius - projectile.radius < 1) {
+            if (distance - enemy.radius - projectile.radius < 1 && !projectile.hitEnemies.has(enemy)) {
+                projectile.hitEnemies.add(enemy);
 
-                score += (enemy.radius - 10 > 10 ? 100 : 250) * (activeUpgrades.doubleDamageAndPoints ? 2 : 1);
-                scoreElement.innerHTML = score;
+                score += (enemy.radius - 10 > 10 ? 100 : 250) * projectile.scoreMultiplier;
+                scoreElement.textContent = score;
 
-                const damage = activeUpgrades.doubleDamageAndPoints ? 20 : 10;
-
-                if (enemy.radius - damage > 10) {
-                    enemy.radius -= 10;
+                if (enemy.radius - projectile.damage > 10) {
+                    enemy.radius -= projectile.damage;
                 } else {
                     enemies.splice(enemyIndex, 1);
                 }
 
-                if (!activeUpgrades.piercingShot) {
+                if (!projectile.piercing) {
                     projectiles.splice(projectileIndex, 1);
-                    break; // Exit inner loop after removing projectile
+                    break;
                 }
             }
         }
     }
 
-    enemies.forEach((enemy) => {
+    for (const enemy of enemies) {
         const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-        enemy.velocity = { x: Math.cos(angle), y: Math.sin(angle) };
+        const speed = enemy.speed ?? 1;
+        enemy.velocity = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed };
         enemy.update();
 
         const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         if (distance - enemy.radius - player.radius < 1) {
-            cancelAnimationFrame(animationId);
-            clearInterval(spawnEnemiesInterval);
-            popupScoreElement.innerHTML = score;
-            popupElement.style.display = "flex";
-            const name = prompt("Enter your name:");
-            saveScore(name, score);
-            displayHighScores();
+            endGame();
+            return;
         }
-    });
+    }
 
     // Use backward loop to safely remove items while iterating
     for (let upgradeIndex = upgrades.length - 1; upgradeIndex >= 0; upgradeIndex--) {
@@ -346,40 +395,52 @@ function animate() {
 
 }
 
+function stopGameplayTimers() {
+    if (animationId != null) cancelAnimationFrame(animationId);
+    animationId = null;
+    clearInterval(spawnEnemiesInterval);
+    clearInterval(spawnUpgradesInterval);
+    clearInterval(spawnBossInterval);
+    spawnEnemiesInterval = null;
+    spawnUpgradesInterval = null;
+    spawnBossInterval = null;
+}
+
+function endGame() {
+    if (!isGameRunning) return;
+    isGameRunning = false;
+    stopGameplayTimers();
+    resetUpgrades();
+
+    popupScoreElement.textContent = score;
+    popupElement.style.display = "flex";
+    const name = prompt("Enter your name:");
+    saveScore(name?.trim() || "Anonymous", score);
+    displayHighScores();
+}
+
 startGameButton.addEventListener("click", () => {
+    stopGameplayTimers();
+    resetUpgrades();
     popupElement.style.display = "none";
-    
-    // Clear any existing game intervals and animation
-    if (animationId) {
-        cancelAnimationFrame(animationId);
-    }
-    if (spawnEnemiesInterval) {
-        clearInterval(spawnEnemiesInterval);
-    }
-    if (spawnUpgradesInterval) {
-        clearInterval(spawnUpgradesInterval);
-    }
-    if (spawnBossInterval) {
-        clearInterval(spawnBossInterval);
-    }
-    
-    // Reset game state
+
     projectiles = [];
     enemies = [];
     upgrades = [];
     score = 0;
-    scoreElement.innerHTML = 0;
+    scoreElement.textContent = 0;
     player = new Player(canvas.width / 2, canvas.height / 2);
-    
+    isMouseDown = false;
+    lastShotTime = 0;
     enemySpawnDelay = 500;
     powerUpSpawnDelay = 10000;
-    
-    // Start new game
+
+    isGameRunning = true;
     animate();
     spawnEnemiesInterval = setInterval(spawnEnemy, enemySpawnDelay);
     spawnUpgradesInterval = setInterval(spawnUpgrade, powerUpSpawnDelay);
     spawnBossInterval = setInterval(spawnBossAndIncreaseDifficulty, 150000);
-    
+
     displayHighScores();
 });
 
