@@ -75,3 +75,11 @@ body {
   color: white;
   z-index: 10;
 }
+#upgrade-info {
+  position: fixed;
+  bottom: 20px;
+  left: 12px;
+  color: gold;
+  z-index: 10;
+  pointer-events: none;
+}
